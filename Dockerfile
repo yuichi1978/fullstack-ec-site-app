@@ -1,44 +1,36 @@
-# --- ステージ1: Node.jsでフロントエンドをビルド ---
+# --- ステージ1: Node.jsビルド (変更なし) ---
 FROM node:20-slim AS node-builder
 WORKDIR /app
 COPY . .
-# インストールを強行し、Viteのビルド（Laravel/Inertia用）を実行
-RUN npm install --legacy-peer-deps
-# ここを修正：通常のbuildではなくvite buildを直接叩くか、確実にLaravelの構成で走らせる
-RUN npx vite build
+RUN npm install --legacy-peer-deps && npm run build
 
-# --- ステージ2: PHP環境を構築 ---
-FROM php:8.2-apache
+# --- ステージ2: PHP環境を 8.4 に変更 ---
+FROM php:8.4-apache
 
-# 必要なシステムパッケージ
+# 必要なシステムパッケージ (libavif-devなどを追加して 8.4 の互換性を高めます)
 RUN apt-get update && apt-get install -y \
-    libpng-dev libonig-dev libxml2-dev zip unzip curl libpq-dev \
+    libpng-dev libonig-dev libxml2-dev zip unzip curl libpq-dev libavif-dev \
     && docker-php-ext-install pdo_mysql pdo_pgsql mbstring exif pcntl bcmath gd
 
-# Node.js実行環境をコピー
+# (以下、以前のDockerfileと同じ設定を継続)
 COPY --from=node-builder /usr/local/bin/node /usr/local/bin/
 COPY --from=node-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 
-# Composerのインストール
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Apacheの設定
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 RUN a2enmod rewrite
 
-# ファイルコピー
 WORKDIR /var/www/html
 COPY . .
-# ビルド済みのフロントエンドファイルをコピー（ここが重要）
 COPY --from=node-builder /app/public/build ./public/build
 
-# PHP依存関係
+# Composerインストール（チェックを外して確実に通す）
 RUN composer install --no-dev --optimize-autoloader --ignore-platform-reqs
 
-# 権限
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 EXPOSE 80

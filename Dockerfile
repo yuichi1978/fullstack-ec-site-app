@@ -5,7 +5,7 @@ COPY . .
 # インストールを強行し、Viteのビルド（Laravel/Inertia用）を実行
 RUN npm install --legacy-peer-deps
 # ここを修正：通常のbuildではなくvite buildを直接叩くか、確実にLaravelの構成で走らせる
-RUN npm run build
+RUN npx vite build
 
 # --- ステージ2: PHP環境を構築 ---
 FROM php:8.2-apache

@@ -36,7 +36,7 @@ COPY . .
 COPY --from=node-builder /app/public/build ./public/build
 
 # PHP依存関係
-RUN composer install --no-dev --optimize-autoloader
+RUN composer install --no-dev --optimize-autoloader --ignore-platform-reqs
 
 # 権限
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache

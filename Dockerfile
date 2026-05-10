@@ -1,7 +1,13 @@
-# 1. PHP 8.2 Apacheをベースに使用
+# --- ステージ1: Node.jsでフロントエンドをビルド ---
+FROM node:20-slim AS node-builder
+WORKDIR /app
+COPY . .
+RUN npm install && npm run build
+
+# --- ステージ2: PHP環境を構築 ---
 FROM php:8.2-apache
 
-# 2. 必要なシステムパッケージのインストール
+# 必要なシステムパッケージのインストール
 RUN apt-get update && apt-get install -y \
     libpng-dev \
     libonig-dev \
@@ -9,37 +15,33 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     curl \
-    gnupg \
-    libpq-dev
+    libpq-dev \
+    && docker-php-ext-install pdo_mysql pdo_pgsql mbstring exif pcntl bcmath gd
 
-# 3. Node.js (LTS) の確実なインストール方法に変更
-RUN mkdir -p /etc/apt/keyrings \
-    && curl -fsSL https://nodesource.com | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://nodesource.com nodistro main" | tee /etc/apt/sources.list.d/nodesource.list \
-    && apt-get update \
-    && apt-get install nodejs -y
+# ステージ1からNode.jsの実行バイナリとビルド成果物をコピー
+COPY --from=node-builder /usr/local/bin/node /usr/local/bin/
+COPY --from=node-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 
-# 4. PHP拡張機能のインストール（PostgreSQL対応も追加）
-RUN docker-php-ext-install pdo_mysql pdo_pgsql mbstring exif pcntl bcmath gd
-
-# 5. Composerのインストール
+# Composerのインストール
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# 6. Apacheの設定
+# Apacheの設定
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 RUN a2enmod rewrite
 
-# 7. アプリケーションファイルのコピー
+# アプリケーションファイルのコピー
 WORKDIR /var/www/html
 COPY . .
+# ビルド済みのフロントエンドファイルをコピー
+COPY --from=node-builder /app/public/build ./public/build
 
-# 8. 依存関係のインストールとビルド（キャッシュを考慮）
+# PHP依存関係のインストール
 RUN composer install --no-dev --optimize-autoloader
-RUN npm install && npm run build
 
-# 9. 権限の設定
+# 権限の設定
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 EXPOSE 80

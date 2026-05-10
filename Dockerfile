@@ -2,7 +2,8 @@
 FROM node:20-slim AS node-builder
 WORKDIR /app
 COPY . .
-RUN npm install && npm run build
+# 依存関係の競合を強制スルーしてインストールし、ビルドを実行
+RUN npm install --legacy-peer-deps && npm run build
 
 # --- ステージ2: PHP環境を構築 ---
 FROM php:8.2-apache
@@ -18,7 +19,7 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && docker-php-ext-install pdo_mysql pdo_pgsql mbstring exif pcntl bcmath gd
 
-# ステージ1からNode.jsの実行バイナリとビルド成果物をコピー
+# ステージ1からNode.jsをコピー
 COPY --from=node-builder /usr/local/bin/node /usr/local/bin/
 COPY --from=node-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm

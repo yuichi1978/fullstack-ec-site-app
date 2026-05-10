@@ -33,4 +33,8 @@ RUN composer install --no-dev --optimize-autoloader --ignore-platform-reqs
 
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
+# ポートの設定
 EXPOSE 80
+
+# 修正ポイント：起動時に自動でマイグレーションを実行
+CMD php artisan migrate --force && apache2-foreground
